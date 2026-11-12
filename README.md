@@ -9,11 +9,12 @@ Otherwise, you just get a [Vanilla Fuseki Setup](https://github.com/AKSW/fuseki-
 
 - Base: [aksw/fuseki-vanilla:6.2.0-2](https://github.com/AKSW/fuseki-docker-vanilla)
 - Pre-installed plugins in `/fuseki/builtin-plugins/`:
-  - [jena-exectracker](https://github.com/Scaseco/jena-exectracker) (v0.7.2)
-  - [graphql4sparql](https://github.com/Scaseco/graphql4sparql) (v0.7.0)
+  - [jena-exectracker](https://github.com/jenax-plus/jena-exectracker) (v0.7.2)
+  - [graphql4sparql](https://github.com/jenax-plus/graphql4sparql) (v0.7.0)
   - [jenax-arq-plugins](https://github.com/Scaseco/jenax) (v6.1.0-1)
   - [jenax-serviceenhancer](https://github.com/Scaseco/jenax) (v6.1.0-1)
-  - [Proxy Plugin](https://github.com/Scaseco/jena-proxy) (v0.7.0)
+  - [jena-proxy](https://github.com/jenax-plus/jena-proxy) (v0.7.1)
+  - [jena-inf-light](https://github.com/jenax-plus/jena-inf-light) (v0.9.0-rc1)
 - Plugin management via CLI: `plugins`
 - Dynamic plugin installation from URLs
 - Volume-based plugin persistence
@@ -36,17 +37,30 @@ docker compose up -d
 
 ### Docker Compose Usage (Recommended)
 
-#### Recommendation: Use a `dc` Wrapper Script
-This script sets user and group ids to that of the current user.
-The `DOCKER_GID` is optional.
-It is needed if you want to use our Qlever Fuseki Plugin. This plugin binds the life-cycle of a dockerized Qlever instance to that of the Fuseki server.
+Set the target user in `.env` (create it from `.env.example`):
 
 ```bash
-#!/usr/bin/env bash
-
-mkdir -p run/configuration
-WANT_UID="$(id -u)" WANT_GID="$(id -g)" DOCKER_GID="$(getent group docker | cut -d: -f3)" docker compose "$@"
+cp .env.example .env
+# edit .env:  WANT_UID=$(id -u)   WANT_GID=$(id -g)
+docker compose up -d
 ```
+
+`docker compose` picks up `WANT_UID`/`WANT_GID` from `.env` automatically.
+`DOCKER_GID` is optional: it is only needed if you use the Qlever Fuseki Plugin,
+which binds the life-cycle of a dockerized Qlever instance to that of the Fuseki server.
+
+#### `init.d` startup hooks
+
+The image's entrypoint runs every `*.sh` in `/fuseki/init.d` (in lexical order)
+**as root** before it chowns the data volume and drops privileges. Mount your own
+scripts into that directory to prepare the runtime — for example: copy host-supplied
+config into the data volume, link a read-only resources mount, and pre-enable the
+plugins your config needs.
+
+The [`example/`](example/) folder demonstrates this pattern: it stages read-only
+config and resources instead of nested bind mounts (so Docker leaves no
+root-owned files behind in the data volume) and enables the plugins its config
+uses — so the server starts with a working setup out of the box.
 
 ## Running as a Non-Root User
 
@@ -62,11 +76,12 @@ The UID/GID do not need to exist in the image's `/etc/passwd`.
 > **Note:** Do not set `user:` in compose (or `--user` with `docker run`). The
 > entrypoint needs root privileges for the chown phase; setting `user:` would break it.
 >
-> Note that files mounted `:ro` (e.g. the example config files) are skipped by the
-> chown phase and must stay readable by `WANT_UID` — so with read-only config mounts,
-> `WANT_UID` should match the host user that owns those files.
+> Note that read-only mounts (e.g. a `:ro` resources directory) are skipped by the
+> chown phase and must stay readable by `WANT_UID` — so `WANT_UID` should be able to
+> read those files (matching the host user that owns them is the simplest choice).
+> The writable data volume, on the other hand, is chowned to `WANT_UID` for you.
 
-The `example/` folder includes a setup with the `dc` wrapper script for simplified docker compose commands.
+The `example/` folder includes a complete setup driven by the `init.d` hook: it stages read-only config and resources and pre-enables the plugins its config needs.
 
 #### Plugin Management
 
@@ -84,12 +99,12 @@ Commands:
 
 
 ```bash
-./dc run --rm --entrypoint plugins fuseki list
-./dc run --rm --entrypoint plugins fuseki status
-./dc run --rm --entrypoint plugins fuseki add https://example.com/plugin-1.0.0.jar
-./dc run --rm --entrypoint plugins fuseki enable plugin-1.0.0.jar anotherplugin.jar
-./dc run --rm --entrypoint plugins fuseki disable plugin-1.0.0.jar anotherplugin.jar
-./dc run --rm --entrypoint plugins fuseki remove plugin-1.0.0.jar
+docker compose run --rm --entrypoint plugins fuseki list
+docker compose run --rm --entrypoint plugins fuseki status
+docker compose run --rm --entrypoint plugins fuseki add https://example.com/plugin-1.0.0.jar
+docker compose run --rm --entrypoint plugins fuseki enable plugin-1.0.0.jar anotherplugin.jar
+docker compose run --rm --entrypoint plugins fuseki disable plugin-1.0.0.jar anotherplugin.jar
+docker compose run --rm --entrypoint plugins fuseki remove plugin-1.0.0.jar
 ```
 
 Replace `fuseki` with your actual service name if different.
@@ -100,12 +115,12 @@ The usage without compose is similar. Instead of the service name you need to sp
 
 List available plugins:
 ```bash
-docker run --rm --entrypoint plugins aksw/fuseki-plus:6.2.0-2 list
+docker run --rm --entrypoint plugins aksw/fuseki-plus:6.2.0-3 list
 ```
 
 Check plugin status:
 ```bash
-docker run --rm --entrypoint plugins aksw/fuseki-plus:6.2.0-2 status
+docker run --rm --entrypoint plugins aksw/fuseki-plus:6.2.0-3 status
 ```
 
 ## Directory Structure of a Container
@@ -113,9 +128,12 @@ docker run --rm --entrypoint plugins aksw/fuseki-plus:6.2.0-2 status
 | Path | Purpose | In Volume? |
 |------|---------|------------|
 | `/fuseki/builtin-plugins/` | Pre-bundled plugins (in image) | No |
+| `/fuseki/init.d/` | Startup scripts, run as root before the server starts | No (mount it) |
+| `/fuseki/user-input/` | Staging area for host-supplied config (mounted read-only) | No (mount it) |
+| `/fuseki/resources/` | Staging area for static resources (mounted read-only) | No (mount it) |
 | `/fuseki/run/plugins/` | User-downloaded plugins | Yes |
 | `/fuseki/run/extra/` | Active plugins (copied here) | Yes |
-| `/fuseki/run/config.ttl` | Fuseki configuration | Yes |
+| `/fuseki/run/config.ttl` | Fuseki configuration (copied in from `user-input`) | Yes |
 
 ## Versioning
 
@@ -124,20 +142,21 @@ Image tag format: `aksw/fuseki-plus:<fuseki-version>-<build>`
 Versions are defined in `build.vars` (the single source of truth):
 
 - `VANILLA_VERSION` — base image tag (`aksw/fuseki-vanilla:<tag>`), synced into the Dockerfile
-- `IMAGE_TAG` — this image's tag, e.g. `6.2.0-2` (currently mirrors the vanilla tag; can be overridden independently)
+- `IMAGE_TAG` — this image's tag, e.g. `6.2.0-3` (set in `build.vars`, independent of the vanilla version)
 
 `make sync-version` propagates both into the Dockerfile, this README, `example/docker-compose.yaml`, and the tests.
 
-Current image version: **6.2.0-2** (vanilla 6.2.0-2)
+Current image version: **6.2.0-3** (vanilla 6.2.0-2)
 
-Release tag: `aksw/fuseki-plus:6.2.0-2`
+Release tag: `aksw/fuseki-plus:6.2.0-3`
 
 | Version   | Changes |
 |-----------|---------|
+| 6.2.0-3   | Added `init.d` startup hooks: the entrypoint runs `/fuseki/init.d/*.sh` as root before the privilege drop. The example now stages read-only config/resources instead of nested bind mounts (no more root-owned placeholder files or busybox init service) and pre-enables its plugins via `init.d`; `docker compose` reads `WANT_UID`/`WANT_GID` from `.env` (no `dc` wrapper). |
 | 6.2.0-2   | Adopted the base image's `WANT_UID`/`WANT_GID` privilege model: compose examples no longer set `user:`; the `plugins` CLI now chowns the data volume and drops to the target user via the base image's `run-as.sh` before running. |
 | 6.2.0-1   | Upgrade to jena 6.2.0. Fixed priority issue that caused `jena-exectracker` to not be able to track query executions for a `jena-proxy` dataset. |
-| 6.1.0-3   | Added [Proxy Plugin](https://github.com/Scaseco/jena-proxy) which supports Datasets over HTTP(S) SPARQL endpoints. |
-| 6.1.0-2   | Updated [ExecTracker Plugin](https://github.com/Scaseco/jena-exectracker/releases/tag/v0.7.1) which features a nicer UI. |
+| 6.1.0-3   | Added [Proxy Plugin](https://github.com/jenax-plus/jena-proxy) which supports Datasets over HTTP(S) SPARQL endpoints. |
+| 6.1.0-2   | Updated [ExecTracker Plugin](https://github.com/jenax-plus/jena-exectracker/releases/tag/v0.7.1) which features a nicer UI. |
 | 6.1.0     | Changed `FUSEKI_BASE` from  `/app/fuseki` to `/fuseki`. |
 | 6.1.0-rc1 | Initial version. |
 

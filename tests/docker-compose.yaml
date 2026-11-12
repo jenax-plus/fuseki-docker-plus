@@ -1,6 +1,6 @@
 services:
   fuseki:
-    image: aksw/fuseki-plus:6.2.0-2
+    image: aksw/fuseki-plus:6.2.0-3
     environment:
       - WANT_UID=${WANT_UID:-1000}
       - WANT_GID=${WANT_GID:-1000}

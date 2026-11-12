@@ -12,7 +12,7 @@ export WANT_GID=$(id -g)
 export BATS_LIB_PATH="/usr/lib/bats"
 
 # Image name (override with IMAGE='foobar' ./run-tests.sh)
-IMAGE="${IMAGE:-aksw/fuseki-plus:6.2.0-2}"
+IMAGE="${IMAGE:-aksw/fuseki-plus:6.2.0-3}"
 
 # Colors
 RED='\033[0;31m'
