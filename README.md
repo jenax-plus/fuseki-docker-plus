@@ -1,7 +1,8 @@
 # fuseki-docker-plus
 
-Customized Apache Jena Fuseki Docker Image with pre-installed plugins and
-a simple plugin manager for self-contained plugin JARs.
+Customized Apache Jena Fuseki Docker Image with pre-installed plugins, a simple
+plugin manager for self-contained plugin JARs, and `init.d` startup hooks that
+run your own scripts (as root) before the Fuseki server launches.
 The plugin JARs bundled with the image must be enabled explicitly with a [one-liner](example).
 Otherwise, you just get a [Vanilla Fuseki Setup](https://github.com/AKSW/fuseki-docker-vanilla).
 
@@ -18,6 +19,7 @@ Otherwise, you just get a [Vanilla Fuseki Setup](https://github.com/AKSW/fuseki-
 - Plugin management via CLI: `plugins`
 - Dynamic plugin installation from URLs
 - Volume-based plugin persistence
+- Startup hooks: mount scripts into `/fuseki/init.d` to prepare the runtime (copy config, link resources, enable plugins) before the server starts
 
 ## Quick Start
 
@@ -51,11 +53,13 @@ which binds the life-cycle of a dockerized Qlever instance to that of the Fuseki
 
 #### `init.d` startup hooks
 
-The image's entrypoint runs every `*.sh` in `/fuseki/init.d` (in lexical order)
-**as root** before it chowns the data volume and drops privileges. Mount your own
-scripts into that directory to prepare the runtime — for example: copy host-supplied
-config into the data volume, link a read-only resources mount, and pre-enable the
-plugins your config needs.
+The image's entrypoint runs every `*.sh` in `/fuseki/init.d` **as root** before it
+chowns the data volume and drops privileges. Scripts run in **lexicographic filename
+order** (the shell expands the glob sorted); name them with a `NN-` numeric prefix
+(e.g. `00-`, `10-`, `20-`) to control the order. Mount your own scripts into that
+directory to prepare the runtime — for example: copy host-supplied config into the
+data volume, link a read-only resources mount, and pre-enable the plugins your
+config needs.
 
 The [`example/`](example/) folder demonstrates this pattern: it stages read-only
 config and resources instead of nested bind mounts (so Docker leaves no
