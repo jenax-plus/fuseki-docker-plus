@@ -17,7 +17,9 @@ services:
              install -D -m 0644 -o "$$WANT_UID" -g "$$WANT_GID" /dev/null /fuseki/run/passwd.txt &&
              install -D -m 0644 -o "$$WANT_UID" -g "$$WANT_GID" /dev/null /fuseki/run/shiro.ini &&
              install -D -m 0644 -o "$$WANT_UID" -g "$$WANT_GID" /dev/null /fuseki/run/configuration/example.service.ttl &&
-             install -D -m 0644 -o "$$WANT_UID" -g "$$WANT_GID" /dev/null /fuseki/run/configuration/dbpedia.proxy.service.ttl'
+             install -D -m 0644 -o "$$WANT_UID" -g "$$WANT_GID" /dev/null /fuseki/run/configuration/dbpedia.proxy.service.ttl
+             install -D -m 0644 -o "$$WANT_UID" -g "$$WANT_GID" /dev/null /fuseki/run/configuration/provider.proxy.service.ttl
+            '
 
   fuseki:
     depends_on:
@@ -47,6 +49,7 @@ services:
       #- ./shiro-ldap.ini:/fuseki/run/shiro.ini:ro
       - ./example.service.ttl:/fuseki/run/configuration/example.service.ttl:ro
       - ./dbpedia.proxy.service.ttl:/fuseki/run/configuration/dbpedia.proxy.service.ttl:ro
+      - ./provider.proxy.service.ttl:/fuseki/run/configuration/provider.proxy.service.ttl:ro
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - 3030:3030
