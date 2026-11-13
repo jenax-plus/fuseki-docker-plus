@@ -9,7 +9,7 @@ ENV FUSEKI_BUILTIN_PLUGINS=${FUSEKI_BUILTIN_PLUGINS}
 ENV FUSEKI_USER_PLUGINS=${FUSEKI_BASE}/plugins
 
 # Install curl for downloading plugins
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+RUN apt-get update && apt-get install -y --no-install-recommends curl gettext-base make \
     && rm -rf /var/lib/apt/lists/*
 
 # Create plugin directories
